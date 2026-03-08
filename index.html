@@ -3,13 +3,14 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-  <title>수박게임 업그레이드판</title>
+  <title>수박게임 업그레이드</title>
   <style>
     * { box-sizing: border-box; }
+
     body {
       margin: 0;
       font-family: Arial, sans-serif;
-      background: linear-gradient(to bottom, #f7f0ff, #eef7ff);
+      background: linear-gradient(to bottom, #f6f0ff, #eef8ff);
       color: #222;
       text-align: center;
       -webkit-tap-highlight-color: transparent;
@@ -18,14 +19,14 @@
 
     h1 {
       margin: 14px 0 8px;
-      font-size: 32px;
+      font-size: 30px;
     }
 
     .top {
       width: 100%;
       max-width: 430px;
       margin: 0 auto 10px;
-      background: rgba(255,255,255,0.95);
+      background: rgba(255,255,255,0.96);
       border-radius: 20px;
       padding: 12px 14px;
       box-shadow: 0 6px 16px rgba(0,0,0,0.08);
@@ -50,6 +51,7 @@
       align-items: center;
       justify-content: center;
       font-size: 28px;
+      box-shadow: inset 0 2px 6px rgba(0,0,0,0.04);
     }
 
     .btns {
@@ -62,7 +64,7 @@
 
     button {
       border: none;
-      border-radius: 12px;
+      border-radius: 14px;
       padding: 12px 18px;
       font-size: 17px;
       cursor: pointer;
@@ -85,7 +87,7 @@
     #gameCanvas {
       width: 100%;
       display: block;
-      background: linear-gradient(to bottom, #fffaf1, #fff0dc);
+      background: linear-gradient(to bottom, #fffaf1, #fff1e2);
       border-radius: 24px;
       box-shadow: 0 8px 18px rgba(0,0,0,0.12);
       touch-action: none;
@@ -113,10 +115,12 @@
       <div>점수: <strong id="score">0</strong></div>
       <div>최고기록: <strong id="bestScore">0</strong></div>
     </div>
+
     <div class="row">
       <div>다음 과일</div>
       <div class="next-box" id="nextFruit">🍒</div>
     </div>
+
     <div class="btns">
       <button id="restartBtn">다시 시작</button>
       <button id="soundBtn" class="secondary">소리 켜짐</button>
@@ -124,7 +128,8 @@
   </div>
 
   <div id="wrap">
-    <canvas id="gameCanvas" width="430" height="640"></canvas>
+    <!-- 높이를 줄여서 모바일에서도 아래까지 보이게 -->
+    <canvas id="gameCanvas" width="430" height="500"></canvas>
   </div>
 
   <div class="guide">
@@ -146,37 +151,40 @@
 
     const W = canvas.width;
     const H = canvas.height;
+
     const WALL = 8;
-    const TOP_LINE_Y = 110;
-    const DROP_Y = 82;
-    const GRAVITY = 0.25;
-    const FRICTION = 0.995;
-    const BOUNCE = 0.22;
-    const BEST_KEY = "suika_best_score_v2";
+    const TOP_LINE_Y = 95;
+    const DROP_Y = 70;
+
+    const GRAVITY = 0.22;
+    const AIR_FRICTION = 0.997;
+    const FLOOR_BOUNCE = 0.16;
+    const SIDE_BOUNCE = 0.18;
+    const BEST_KEY = "suika_best_score_v3";
 
     const FRUITS = [
-      { emoji: "🍒", r: 18, score: 1, color: "#ffccd5" },
-      { emoji: "🍓", r: 22, score: 3, color: "#ff8fa3" },
-      { emoji: "🍇", r: 27, score: 6, color: "#d0a2f7" },
-      { emoji: "🍊", r: 33, score: 10, color: "#ffd6a5" },
-      { emoji: "🍎", r: 40, score: 16, color: "#ffadad" },
-      { emoji: "🍐", r: 48, score: 24, color: "#cdeac0" },
-      { emoji: "🍑", r: 58, score: 36, color: "#ffc6c6" },
-      { emoji: "🍈", r: 70, score: 52, color: "#b5e48c" },
-      { emoji: "🍉", r: 85, score: 80, color: "#95d5b2" }
+      { emoji: "🍒", r: 18, score: 1, color: "#ffd0d8" },
+      { emoji: "🍓", r: 22, score: 3, color: "#ff96a8" },
+      { emoji: "🍇", r: 27, score: 6, color: "#d6b3ff" },
+      { emoji: "🍊", r: 33, score: 10, color: "#ffd4a3" },
+      { emoji: "🍎", r: 40, score: 16, color: "#ffb4b4" },
+      { emoji: "🍐", r: 48, score: 24, color: "#d4efb3" },
+      { emoji: "🍑", r: 58, score: 36, color: "#ffc7cf" },
+      { emoji: "🍈", r: 70, score: 52, color: "#bfe59a" },
+      { emoji: "🍉", r: 85, score: 80, color: "#9ad6ab" }
     ];
 
     let balls = [];
     let effects = [];
-    let nextType = 0;
     let score = 0;
     let bestScore = Number(localStorage.getItem(BEST_KEY) || 0);
-    let gameOver = false;
-    let canDrop = true;
+    let nextType = 0;
     let spawnX = W / 2;
-    let idSeq = 1;
+    let canDrop = true;
+    let gameOver = false;
     let soundOn = true;
     let topDangerFrames = 0;
+    let idSeq = 1;
 
     bestScoreEl.textContent = bestScore;
 
@@ -187,19 +195,6 @@
 
     function setNextFruit() {
       nextFruitEl.textContent = FRUITS[nextType].emoji;
-    }
-
-    function resetGame() {
-      balls = [];
-      effects = [];
-      score = 0;
-      gameOver = false;
-      canDrop = true;
-      spawnX = W / 2;
-      nextType = randNextType();
-      topDangerFrames = 0;
-      scoreEl.textContent = score;
-      setNextFruit();
     }
 
     function createBall(type, x, y) {
@@ -216,20 +211,35 @@
       };
     }
 
+    function resetGame() {
+      balls = [];
+      effects = [];
+      score = 0;
+      scoreEl.textContent = score;
+      gameOver = false;
+      canDrop = true;
+      topDangerFrames = 0;
+      spawnX = W / 2;
+      nextType = randNextType();
+      setNextFruit();
+    }
+
     function addScore(v, x, y) {
       score += v;
       scoreEl.textContent = score;
+
       if (score > bestScore) {
         bestScore = score;
         localStorage.setItem(BEST_KEY, String(bestScore));
         bestScoreEl.textContent = bestScore;
       }
+
       effects.push({
         x,
         y,
         text: "+" + v,
         alpha: 1,
-        vy: -0.7
+        vy: -0.8
       });
     }
 
@@ -255,14 +265,18 @@
 
     function dropFruit() {
       if (!canDrop || gameOver) return;
+
       const type = nextType;
       const r = FRUITS[type].r;
       const x = clamp(spawnX, WALL + r, W - WALL - r);
+
       balls.push(createBall(type, x, DROP_Y));
       beep(320, 0.04);
 
       canDrop = false;
-      setTimeout(() => { canDrop = true; }, 260);
+      setTimeout(() => {
+        canDrop = true;
+      }, 240);
 
       nextType = randNextType();
       setNextFruit();
@@ -271,21 +285,24 @@
     function resolveWalls(b) {
       if (b.x - b.r < WALL) {
         b.x = WALL + b.r;
-        b.vx *= -BOUNCE;
+        b.vx *= -SIDE_BOUNCE;
       }
+
       if (b.x + b.r > W - WALL) {
         b.x = W - WALL - b.r;
-        b.vx *= -BOUNCE;
+        b.vx *= -SIDE_BOUNCE;
       }
+
       if (b.y + b.r > H - WALL) {
         b.y = H - WALL - b.r;
-        b.vy *= -BOUNCE;
-        b.vx *= 0.98;
-        if (Math.abs(b.vy) < 0.8) b.vy = 0;
+        b.vy *= -FLOOR_BOUNCE;
+        b.vx *= 0.985;
+        if (Math.abs(b.vy) < 0.7) b.vy = 0;
       }
+
       if (b.y - b.r < WALL) {
         b.y = WALL + b.r;
-        if (b.vy < 0) b.vy *= -BOUNCE;
+        if (b.vy < 0) b.vy *= -FLOOR_BOUNCE;
       }
     }
 
@@ -294,7 +311,7 @@
         b.vy += GRAVITY;
         b.x += b.vx;
         b.y += b.vy;
-        b.vx *= FRICTION;
+        b.vx *= AIR_FRICTION;
         resolveWalls(b);
       }
 
@@ -316,30 +333,34 @@
             const ny = dy / dist;
             const overlap = minDist - dist;
 
+            // 더 자연스럽게 분리
             a.x -= nx * overlap * 0.5;
             a.y -= ny * overlap * 0.5;
             b.x += nx * overlap * 0.5;
             b.y += ny * overlap * 0.5;
 
+            // 충돌 반응
             const rvx = b.vx - a.vx;
             const rvy = b.vy - a.vy;
             const velAlongNormal = rvx * nx + rvy * ny;
 
             if (velAlongNormal < 0) {
-              const e = 0.2;
+              const e = 0.16;
               const impulse = -(1 + e) * velAlongNormal / 2;
               const ix = impulse * nx;
               const iy = impulse * ny;
+
               a.vx -= ix;
               a.vy -= iy;
               b.vx += ix;
               b.vy += iy;
             }
 
+            // 같은 과일 합치기
             if (
               a.type === b.type &&
               a.type < FRUITS.length - 1 &&
-              Math.abs(a.vx) + Math.abs(a.vy) + Math.abs(b.vx) + Math.abs(b.vy) < 7.5
+              Math.abs(a.vx) + Math.abs(a.vy) + Math.abs(b.vx) + Math.abs(b.vy) < 7.8
             ) {
               const mx = (a.x + b.x) / 2;
               const my = (a.y + b.y) / 2;
@@ -375,7 +396,7 @@
       if (touchingTop) topDangerFrames++;
       else topDangerFrames = Math.max(0, topDangerFrames - 2);
 
-      if (topDangerFrames > 85) {
+      if (topDangerFrames > 75) {
         gameOver = true;
         beep(180, 0.22);
       }
@@ -384,15 +405,18 @@
     function drawBall(b) {
       const fruit = FRUITS[b.type];
 
+      // 원형 바탕
       ctx.beginPath();
       ctx.arc(b.x, b.y, b.r, 0, Math.PI * 2);
       ctx.fillStyle = fruit.color;
       ctx.fill();
 
+      // 가장자리
       ctx.lineWidth = 2;
-      ctx.strokeStyle = "rgba(0,0,0,0.08)";
+      ctx.strokeStyle = "rgba(0,0,0,0.07)";
       ctx.stroke();
 
+      // 과일 이모지
       ctx.font = `${Math.max(18, b.r * 0.9)}px Arial`;
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
@@ -417,19 +441,22 @@
       ctx.fillStyle = "rgba(255,255,255,0.28)";
       ctx.fillRect(WALL, WALL, W - WALL * 2, H - WALL * 2);
 
+      // 게임오버 라인
       ctx.setLineDash([8, 6]);
       ctx.lineWidth = 3;
-      ctx.strokeStyle = topDangerFrames > 20 ? "#ff5f5f" : "#ffb3b3";
+      ctx.strokeStyle = topDangerFrames > 18 ? "#ff6f6f" : "#ffc1c1";
       ctx.beginPath();
       ctx.moveTo(WALL + 12, TOP_LINE_Y);
       ctx.lineTo(W - WALL - 12, TOP_LINE_Y);
       ctx.stroke();
       ctx.setLineDash([]);
 
+      // 떨어질 위치 미리보기
       if (!gameOver) {
         const r = FRUITS[nextType].r;
         const x = clamp(spawnX, WALL + r, W - WALL - r);
-        ctx.globalAlpha = 0.35;
+
+        ctx.globalAlpha = 0.3;
         ctx.beginPath();
         ctx.arc(x, DROP_Y, r, 0, Math.PI * 2);
         ctx.fillStyle = FRUITS[nextType].color;
@@ -452,14 +479,14 @@
         ctx.fillStyle = "#fff";
         ctx.textAlign = "center";
         ctx.textBaseline = "middle";
-        ctx.font = "bold 38px Arial";
-        ctx.fillText("게임 오버", W / 2, H / 2 - 28);
+        ctx.font = "bold 34px Arial";
+        ctx.fillText("게임 오버", W / 2, H / 2 - 24);
 
-        ctx.font = "24px Arial";
-        ctx.fillText(`점수 ${score}`, W / 2, H / 2 + 20);
+        ctx.font = "22px Arial";
+        ctx.fillText(`점수 ${score}`, W / 2, H / 2 + 16);
 
-        ctx.font = "18px Arial";
-        ctx.fillText("다시 시작 버튼을 눌러주세요", W / 2, H / 2 + 58);
+        ctx.font = "17px Arial";
+        ctx.fillText("다시 시작 버튼을 눌러주세요", W / 2, H / 2 + 50);
       }
     }
 
