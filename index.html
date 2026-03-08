@@ -1,0 +1,499 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>수박게임</title>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: Arial, sans-serif;
+      background: #f4f6fb;
+      color: #222;
+      text-align: center;
+      -webkit-tap-highlight-color: transparent;
+      user-select: none;
+    }
+    h1 {
+      margin: 14px 0 8px;
+      font-size: 34px;
+    }
+    .top {
+      width: 100%;
+      max-width: 430px;
+      margin: 0 auto 10px;
+      background: #fff;
+      border-radius: 18px;
+      padding: 12px 14px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+    }
+    .row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 8px;
+      margin: 6px 0;
+      font-size: 20px;
+    }
+    .next-box {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 52px;
+      height: 52px;
+      border-radius: 50%;
+      background: #f7f7f7;
+      font-size: 28px;
+      border: 2px solid #e8e8e8;
+    }
+    .btns {
+      display: flex;
+      gap: 10px;
+      justify-content: center;
+      margin-top: 8px;
+      flex-wrap: wrap;
+    }
+    button {
+      border: none;
+      border-radius: 12px;
+      padding: 12px 18px;
+      font-size: 17px;
+      cursor: pointer;
+      background: #2d9bf0;
+      color: white;
+      box-shadow: 0 3px 8px rgba(0,0,0,0.14);
+    }
+    button.secondary {
+      background: #7c4dff;
+    }
+    #wrap {
+      width: 100%;
+      max-width: 430px;
+      margin: 0 auto;
+      position: relative;
+    }
+    #gameCanvas {
+      width: 100%;
+      display: block;
+      background: linear-gradient(to bottom, #fffaf0, #fff3e6);
+      border-radius: 22px;
+      box-shadow: 0 6px 16px rgba(0,0,0,0.12);
+      touch-action: none;
+    }
+    .guide {
+      width: 100%;
+      max-width: 430px;
+      margin: 12px auto 20px;
+      font-size: 15px;
+      line-height: 1.7;
+      background: #fff;
+      border-radius: 16px;
+      padding: 12px 14px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+      text-align: left;
+    }
+  </style>
+</head>
+<body>
+  <h1>🍉 수박게임</h1>
+
+  <div class="top">
+    <div class="row">
+      <div>점수: <strong id="score">0</strong></div>
+      <div>최고기록: <strong id="bestScore">0</strong></div>
+    </div>
+    <div class="row">
+      <div>다음 과일</div>
+      <div class="next-box" id="nextFruit">🍒</div>
+    </div>
+    <div class="btns">
+      <button id="restartBtn">다시 시작</button>
+      <button id="soundBtn" class="secondary">소리 켜짐</button>
+    </div>
+  </div>
+
+  <div id="wrap">
+    <canvas id="gameCanvas" width="430" height="640"></canvas>
+  </div>
+
+  <div class="guide">
+    <strong>게임 방법</strong><br>
+    화면 위의 과일 위치를 좌우로 움직인 뒤 화면을 탭하면 과일이 떨어집니다.<br>
+    같은 과일끼리 닿으면 더 큰 과일로 합쳐집니다.<br>
+    윗선까지 과일이 오래 닿아 있으면 게임 오버입니다.
+  </div>
+
+  <script>
+    const canvas = document.getElementById("gameCanvas");
+    const ctx = canvas.getContext("2d");
+
+    const scoreEl = document.getElementById("score");
+    const bestScoreEl = document.getElementById("bestScore");
+    const nextFruitEl = document.getElementById("nextFruit");
+    const restartBtn = document.getElementById("restartBtn");
+    const soundBtn = document.getElementById("soundBtn");
+
+    const W = canvas.width;
+    const H = canvas.height;
+    const WALL = 8;
+    const TOP_LINE_Y = 110;
+    const DROP_Y = 82;
+    const GRAVITY = 0.24;
+    const FRICTION = 0.994;
+    const BOUNCE = 0.18;
+    const MAX_BALLS = 80;
+
+    const BEST_KEY = "suika_best_score_v1";
+
+    const FRUITS = [
+      { emoji: "🍒", r: 18, score: 1, color: "#ffb3ba" },
+      { emoji: "🍓", r: 22, score: 3, color: "#ff8a80" },
+      { emoji: "🍇", r: 27, score: 6, color: "#ce93d8" },
+      { emoji: "🍊", r: 33, score: 10, color: "#ffcc80" },
+      { emoji: "🍎", r: 40, score: 16, color: "#ef9a9a" },
+      { emoji: "🍐", r: 48, score: 24, color: "#c5e1a5" },
+      { emoji: "🍑", r: 58, score: 36, color: "#f8bbd0" },
+      { emoji: "🍈", r: 70, score: 52, color: "#aed581" },
+      { emoji: "🍉", r: 85, score: 75, color: "#81c784" }
+    ];
+
+    let balls = [];
+    let nextType = 0;
+    let score = 0;
+    let bestScore = Number(localStorage.getItem(BEST_KEY) || 0);
+    let gameOver = false;
+    let canDrop = true;
+    let spawnX = W / 2;
+    let idSeq = 1;
+    let soundOn = true;
+    let topDangerFrames = 0;
+
+    bestScoreEl.textContent = bestScore;
+
+    function randNextType() {
+      // 너무 큰 과일이 초반부터 나오지 않도록 작은 과일 중심
+      const arr = [0, 0, 0, 1, 1, 2];
+      return arr[Math.floor(Math.random() * arr.length)];
+    }
+
+    function setNextFruit() {
+      nextFruitEl.textContent = FRUITS[nextType].emoji;
+    }
+
+    function resetGame() {
+      balls = [];
+      score = 0;
+      gameOver = false;
+      canDrop = true;
+      spawnX = W / 2;
+      nextType = randNextType();
+      topDangerFrames = 0;
+      scoreEl.textContent = score;
+      setNextFruit();
+    }
+
+    function createBall(type, x, y) {
+      const f = FRUITS[type];
+      return {
+        id: idSeq++,
+        type,
+        x,
+        y,
+        vx: 0,
+        vy: 0,
+        r: f.r,
+        merged: false
+      };
+    }
+
+    function addScore(v) {
+      score += v;
+      scoreEl.textContent = score;
+      if (score > bestScore) {
+        bestScore = score;
+        localStorage.setItem(BEST_KEY, String(bestScore));
+        bestScoreEl.textContent = bestScore;
+      }
+    }
+
+    function clamp(v, min, max) {
+      return Math.max(min, Math.min(max, v));
+    }
+
+    function beep(freq = 440, duration = 0.05) {
+      if (!soundOn) return;
+      try {
+        const actx = beep.ctx || (beep.ctx = new (window.AudioContext || window.webkitAudioContext)());
+        const osc = actx.createOscillator();
+        const gain = actx.createGain();
+        osc.type = "sine";
+        osc.frequency.value = freq;
+        gain.gain.value = 0.03;
+        osc.connect(gain);
+        gain.connect(actx.destination);
+        osc.start();
+        osc.stop(actx.currentTime + duration);
+      } catch (e) {}
+    }
+
+    function dropFruit() {
+      if (!canDrop || gameOver) return;
+      if (balls.length >= MAX_BALLS) return;
+
+      const type = nextType;
+      const r = FRUITS[type].r;
+      const x = clamp(spawnX, WALL + r, W - WALL - r);
+      const y = DROP_Y;
+
+      balls.push(createBall(type, x, y));
+      beep(360, 0.04);
+
+      canDrop = false;
+      setTimeout(() => {
+        canDrop = true;
+      }, 280);
+
+      nextType = randNextType();
+      setNextFruit();
+    }
+
+    function resolveWalls(b) {
+      if (b.x - b.r < WALL) {
+        b.x = WALL + b.r;
+        b.vx *= -BOUNCE;
+      }
+      if (b.x + b.r > W - WALL) {
+        b.x = W - WALL - b.r;
+        b.vx *= -BOUNCE;
+      }
+      if (b.y + b.r > H - WALL) {
+        b.y = H - WALL - b.r;
+        b.vy *= -BOUNCE;
+        b.vx *= 0.98;
+        if (Math.abs(b.vy) < 0.9) b.vy = 0;
+      }
+      if (b.y - b.r < WALL) {
+        b.y = WALL + b.r;
+        if (b.vy < 0) b.vy *= -BOUNCE;
+      }
+    }
+
+    function physicsStep() {
+      // 중력 + 이동
+      for (const b of balls) {
+        b.vy += GRAVITY;
+        b.x += b.vx;
+        b.y += b.vy;
+        b.vx *= FRICTION;
+        resolveWalls(b);
+      }
+
+      // 충돌 처리
+      for (let i = 0; i < balls.length; i++) {
+        for (let j = i + 1; j < balls.length; j++) {
+          const a = balls[i];
+          const b = balls[j];
+          if (a.merged || b.merged) continue;
+
+          const dx = b.x - a.x;
+          const dy = b.y - a.y;
+          const dist = Math.hypot(dx, dy);
+          const minDist = a.r + b.r;
+
+          if (dist === 0) continue;
+
+          if (dist < minDist) {
+            const nx = dx / dist;
+            const ny = dy / dist;
+            const overlap = minDist - dist;
+
+            // 위치 분리
+            a.x -= nx * overlap * 0.5;
+            a.y -= ny * overlap * 0.5;
+            b.x += nx * overlap * 0.5;
+            b.y += ny * overlap * 0.5;
+
+            // 속도 반영
+            const rvx = b.vx - a.vx;
+            const rvy = b.vy - a.vy;
+            const velAlongNormal = rvx * nx + rvy * ny;
+
+            if (velAlongNormal < 0) {
+              const e = 0.18;
+              const impulse = -(1 + e) * velAlongNormal / 2;
+              const ix = impulse * nx;
+              const iy = impulse * ny;
+              a.vx -= ix;
+              a.vy -= iy;
+              b.vx += ix;
+              b.vy += iy;
+            }
+
+            // 합치기
+            if (
+              a.type === b.type &&
+              a.type < FRUITS.length - 1 &&
+              Math.abs(a.vx) + Math.abs(a.vy) + Math.abs(b.vx) + Math.abs(b.vy) < 7
+            ) {
+              const mx = (a.x + b.x) / 2;
+              const my = (a.y + b.y) / 2;
+
+              a.merged = true;
+              b.merged = true;
+
+              balls.push(createBall(a.type + 1, mx, my));
+              addScore(FRUITS[a.type + 1].score);
+              beep(620, 0.06);
+            }
+          }
+        }
+      }
+
+      balls = balls.filter(b => !b.merged);
+
+      // 과일이 너무 많으면 속도 정리
+      for (const b of balls) {
+        if (Math.abs(b.vx) < 0.01) b.vx = 0;
+        if (Math.abs(b.vy) < 0.01) b.vy = 0;
+      }
+
+      // 게임 오버 체크
+      let touchingTop = false;
+      for (const b of balls) {
+        if (b.y - b.r < TOP_LINE_Y) {
+          touchingTop = true;
+          break;
+        }
+      }
+
+      if (touchingTop) topDangerFrames++;
+      else topDangerFrames = Math.max(0, topDangerFrames - 2);
+
+      if (topDangerFrames > 80) {
+        gameOver = true;
+        beep(180, 0.25);
+      }
+    }
+
+    function drawBall(b) {
+      const fruit = FRUITS[b.type];
+
+      ctx.beginPath();
+      ctx.arc(b.x, b.y, b.r, 0, Math.PI * 2);
+      ctx.fillStyle = fruit.color;
+      ctx.fill();
+
+      ctx.lineWidth = 2;
+      ctx.strokeStyle = "rgba(0,0,0,0.08)";
+      ctx.stroke();
+
+      ctx.font = `${Math.max(18, b.r * 0.9)}px Arial`;
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText(fruit.emoji, b.x, b.y + 1);
+    }
+
+    function draw() {
+      ctx.clearRect(0, 0, W, H);
+
+      // 영역
+      ctx.fillStyle = "rgba(255,255,255,0.25)";
+      ctx.fillRect(WALL, WALL, W - WALL * 2, H - WALL * 2);
+
+      // 게임오버 라인
+      ctx.setLineDash([8, 6]);
+      ctx.lineWidth = 3;
+      ctx.strokeStyle = topDangerFrames > 20 ? "#ff5f5f" : "#ffb3b3";
+      ctx.beginPath();
+      ctx.moveTo(WALL + 12, TOP_LINE_Y);
+      ctx.lineTo(W - WALL - 12, TOP_LINE_Y);
+      ctx.stroke();
+      ctx.setLineDash([]);
+
+      // 다음 과일 떨어질 위치 표시
+      if (!gameOver) {
+        const r = FRUITS[nextType].r;
+        const x = clamp(spawnX, WALL + r, W - WALL - r);
+        ctx.globalAlpha = 0.35;
+        ctx.beginPath();
+        ctx.arc(x, DROP_Y, r, 0, Math.PI * 2);
+        ctx.fillStyle = FRUITS[nextType].color;
+        ctx.fill();
+        ctx.font = `${Math.max(18, r * 0.9)}px Arial`;
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.fillStyle = "#000";
+        ctx.fillText(FRUITS[nextType].emoji, x, DROP_Y + 1);
+        ctx.globalAlpha = 1;
+      }
+
+      for (const b of balls) drawBall(b);
+
+      if (gameOver) {
+        ctx.fillStyle = "rgba(0,0,0,0.42)";
+        ctx.fillRect(0, 0, W, H);
+
+        ctx.fillStyle = "#fff";
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.font = "bold 38px Arial";
+        ctx.fillText("게임 오버", W / 2, H / 2 - 24);
+
+        ctx.font = "24px Arial";
+        ctx.fillText(`점수 ${score}`, W / 2, H / 2 + 20);
+
+        ctx.font = "18px Arial";
+        ctx.fillText("다시 시작 버튼을 눌러주세요", W / 2, H / 2 + 58);
+      }
+    }
+
+    function loop() {
+      if (!gameOver) physicsStep();
+      draw();
+      requestAnimationFrame(loop);
+    }
+
+    function updateSpawnX(clientX) {
+      const rect = canvas.getBoundingClientRect();
+      const scaleX = W / rect.width;
+      spawnX = (clientX - rect.left) * scaleX;
+    }
+
+    function onPointerDown(e) {
+      if (gameOver) return;
+      const p = e.touches ? e.touches[0] : e;
+      updateSpawnX(p.clientX);
+      dropFruit();
+    }
+
+    function onPointerMove(e) {
+      const p = e.touches ? e.touches[0] : e;
+      updateSpawnX(p.clientX);
+    }
+
+    canvas.addEventListener("mousemove", onPointerMove);
+    canvas.addEventListener("mousedown", onPointerDown);
+
+    canvas.addEventListener("touchstart", (e) => {
+      e.preventDefault();
+      onPointerDown(e);
+    }, { passive: false });
+
+    canvas.addEventListener("touchmove", (e) => {
+      e.preventDefault();
+      onPointerMove(e);
+    }, { passive: false });
+
+    restartBtn.addEventListener("click", resetGame);
+
+    soundBtn.addEventListener("click", () => {
+      soundOn = !soundOn;
+      soundBtn.textContent = soundOn ? "소리 켜짐" : "소리 꺼짐";
+    });
+
+    resetGame();
+    loop();
+  </script>
+</body>
+</html>
